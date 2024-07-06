@@ -3,7 +3,6 @@ import os
 import random
 import time
 from sys import exit
-import tensorflow as tf
 pygame.init()
 
 # Valid values: HUMAN_MODE or AI_MODE

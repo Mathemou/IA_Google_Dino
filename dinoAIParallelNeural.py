@@ -3,7 +3,8 @@ import os
 import random
 import time
 from sys import exit
-import tensorflow as tf
+from scipy import stats
+import numpy as np
 
 pygame.init()
 
@@ -229,23 +230,19 @@ class KeyNNClassifier(KeyClassifier):
         self.model = self.build_model()
 
     def build_model(self):
-        # Inicializa os pesos e bias manualmente
         model = {
-            'W1': np.random.randn(7, 64) * 0.01,
-            'b1': np.zeros((1, 64)),
-            'W2': np.random.randn(64, 64) * 0.01,
-            'b2': np.zeros((1, 64)),
-            'W3': np.random.randn(64, 3) * 0.01,
-            'b3': np.zeros((1, 3))
+            'W1': np.random.randn(7, 4) * 0.01,
+            'b1': np.zeros((1, 4)),
+            'W2': np.random.randn(4, 1) * 0.01,
+            'b2': np.zeros((1, 1))
         }
         return model
 
     def relu(self, Z):
         return np.maximum(0, Z)
 
-    def softmax(self, Z):
-        expZ = np.exp(Z - np.max(Z))
-        return expZ / expZ.sum(axis=1, keepdims=True)
+    def sigmoid(self, Z):
+        return 1 / (1 + np.exp(-Z))
 
     def forward_propagation(self, X):
         model = self.model
@@ -253,28 +250,18 @@ class KeyNNClassifier(KeyClassifier):
         model['Z1'] = np.dot(X, model['W1']) + model['b1']
         model['A1'] = self.relu(model['Z1'])
         model['Z2'] = np.dot(model['A1'], model['W2']) + model['b2']
-        model['A2'] = self.relu(model['Z2'])
-        model['Z3'] = np.dot(model['A2'], model['W3']) + model['b3']
-        model['A3'] = self.softmax(model['Z3'])
+        model['A2'] = self.sigmoid(model['Z2'])
 
-        return model['A3']
+        return model['A2']
 
-    def train_model(self, X_train, y_train, epochs=10, learning_rate=0.01):
+    def train_model(self, X_train, y_train, epochs=50, learning_rate=0.01):
         m = X_train.shape[0]
 
         for epoch in range(epochs):
-            A3 = self.forward_propagation(X_train)
-
-            # One-hot encoding dos rótulos
-            y_one_hot = np.eye(3)[y_train]
+            A2 = self.forward_propagation(X_train)
 
             # Backpropagation
-            dZ3 = A3 - y_one_hot
-            dW3 = np.dot(self.model['A2'].T, dZ3) / m
-            db3 = np.sum(dZ3, axis=0, keepdims=True) / m
-
-            dA2 = np.dot(dZ3, self.model['W3'].T)
-            dZ2 = dA2 * (self.model['A2'] > 0)
+            dZ2 = A2 - y_train.reshape(-1, 1)
             dW2 = np.dot(self.model['A1'].T, dZ2) / m
             db2 = np.sum(dZ2, axis=0, keepdims=True) / m
 
@@ -284,8 +271,6 @@ class KeyNNClassifier(KeyClassifier):
             db1 = np.sum(dZ1, axis=0, keepdims=True) / m
 
             # Atualização dos parâmetros
-            self.model['W3'] -= learning_rate * dW3
-            self.model['b3'] -= learning_rate * db3
             self.model['W2'] -= learning_rate * dW2
             self.model['b2'] -= learning_rate * db2
             self.model['W1'] -= learning_rate * dW1
@@ -295,38 +280,16 @@ class KeyNNClassifier(KeyClassifier):
         obType_encoded = 1 if isinstance(obType, Bird) else 0
         nextObType_encoded = 1 if isinstance(nextObType, Bird) else 0
         input_data = np.array([[distance, obHeight, speed, obType_encoded, nextObDistance, nextObHeight, nextObType_encoded]])
-        predictions = self.forward_propagation(input_data)
-        action = np.argmax(predictions)
-
-        if action == 0:
-            return "K_NO"
-        elif action == 1:
+        prediction = self.forward_propagation(input_data)
+        print(prediction)
+        if prediction >= 0.55:
             return "K_UP"
-        elif action == 2:
+        else:
             return "K_DOWN"
 
-    def updateState(self, state):
+    def updateState(self, state):  
         self.state = state
-
-class KeySimplestClassifier(KeyClassifier):
-    def __init__(self, state):
-        self.state = state
-
-    def keySelector(self, distance, obHeight, speed, obType, nextObDistance, nextObHeight,nextObType):
-        self.state = sorted(self.state, key=first)
-        for s, d in self.state:
-            if speed < s:
-                limDist = d
-                break
-        if distance <= limDist:
-            if isinstance(obType, Bird) and obHeight > 50:
-                return "K_DOWN"
-            else:
-                return "K_UP"
-        return "K_NO"
-
-    def updateState(self, state):
-        self.state = state
+        
 
 
 def playerKeySelector():
@@ -513,32 +476,8 @@ def gradient_ascent(state, max_time):
                 state = neighborhood[i]
                 max_value = value
                 better = True
-        '''
-        for s in neighborhood:
-            aiPlayer = KeySimplestClassifier(s)
-            res, value = manyPlaysResults(3)
-            if value > max_value:
-                state = s
-                max_value = value
-                better = True
-        '''
         end = time.process_time()
     return state, max_value
-
-
-from scipy import stats
-import numpy as np
-
-def manyPlaysResultsTrain(rounds,solutions):
-    results = []
-
-    for round in range(rounds):
-        results += [playGame(solutions)]
-
-    npResults = np.asarray(results)
-
-    mean_results = np.mean(npResults,axis = 0) - np.std(npResults,axis=0) # axis 0 calcula media da coluna
-    return mean_results
 
 
 def manyPlaysResultsTest(rounds,best_solution):
@@ -549,14 +488,13 @@ def manyPlaysResultsTest(rounds,best_solution):
     npResults = np.asarray(results)
     return (results, npResults.mean() - npResults.std())
 
-
 def main():
 
     initial_state = [(15, 250), (18, 350), (20, 450), (1000, 550)]
     best_state, best_value = gradient_ascent(initial_state, 5000)
-    res, value = manyPlaysResultsTest(30, best_state)
+    print(best_state, best_value)
+    '''res, value = manyPlaysResultsTest(30, best_state)
     npRes = np.asarray(res)
-    print(res, npRes.mean(), npRes.std(), value)
-
+    print(res, npRes.mean(), npRes.std(), value)'''
 
 main()

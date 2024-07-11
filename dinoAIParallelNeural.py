@@ -10,7 +10,7 @@ pygame.init()
 
 # Valid values: HUMAN_MODE or AI_MODE
 GAME_MODE = "AI_MODE"
-RENDER_GAME = True
+RENDER_GAME = False
 
 # Global Constants
 SCREEN_HEIGHT = 600
@@ -493,8 +493,8 @@ def main():
     initial_state = [(15, 250), (18, 350), (20, 450), (1000, 550)]
     best_state, best_value = gradient_ascent(initial_state, 5000)
     print(best_state, best_value)
-    '''res, value = manyPlaysResultsTest(30, best_state)
+    res, value = manyPlaysResultsTest(30, best_state)
     npRes = np.asarray(res)
-    print(res, npRes.mean(), npRes.std(), value)'''
+    print(res, npRes.mean(), npRes.std(), value)
 
 main()

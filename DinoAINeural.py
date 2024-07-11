@@ -5,9 +5,11 @@ import time
 from sys import exit
 pygame.init()
 
+global aiPlayer
+
 # Valid values: HUMAN_MODE or AI_MODE
 GAME_MODE = "AI_MODE"
-RENDER_GAME = True
+RENDER_GAME = False
 
 # Global Constants
 SCREEN_HEIGHT = 600
@@ -220,17 +222,17 @@ class KeyNNClassifier(KeyClassifier):
     def __init__(self, state):
         super().__init__(state)
         self.state = state
-        self.model = self.build_model()
+        self.model = self.build_model(state)
 
-    def build_model(self):
-        # Inicializa os pesos e bias manualmente
+    def build_model(self, state):
+        # Use o state para inicializar os pesos e bias diretamente
         model = {
-            'W1': np.random.randn(7, 64) * 0.01,
-            'b1': np.zeros((1, 64)),
-            'W2': np.random.randn(64, 64) * 0.01,
-            'b2': np.zeros((1, 64)),
-            'W3': np.random.randn(64, 3) * 0.01,
-            'b3': np.zeros((1, 3))
+            'W1': state['W1'],
+            'b1': state['b1'],
+            'W2': state['W2'],
+            'b2': state['b2'],
+            'W3': state['W3'],
+            'b3': state['b3']
         }
         return model
 
@@ -335,6 +337,7 @@ def playerKeySelector():
 
 
 def playGame():
+    global aiPlayer
     global game_speed, x_pos_bg, y_pos_bg, points, obstacles
     run = True
 
@@ -448,71 +451,36 @@ def playGame():
                 return points
 
 
-# Change State Operator
-def change_state(state, position, vs, vd):
-    aux = state.copy()
-    s, d = state[position]
-    ns = s + vs
-    nd = d + vd
-    if ns < 15 or nd > 1000:
-        return []
-    return aux[:position] + [(ns, nd)] + aux[position + 1:]
-
-
-# Neighborhood
-def generate_neighborhood(state):
-    neighborhood = []
-    state_size = len(state)
-    for i in range(state_size):
-        ds = random.randint(1, 10)
-        dd = random.randint(1, 100)
-        new_states = [change_state(state, i, ds, 0), change_state(state, i, (-ds), 0), change_state(state, i, 0, dd),
-                      change_state(state, i, 0, (-dd))]
-        for s in new_states:
-            if s != []:
-                neighborhood.append(s)
-    return neighborhood
-
-
-# Gradiente Ascent
-def gradient_ascent(state, max_time):
-    start = time.process_time()
-    res, max_value = manyPlaysResults(3)
-    better = True
-    end = 0
-    while better and end - start <= max_time:
-        neighborhood = generate_neighborhood(state)
-        better = False
-        for s in neighborhood:
-            aiPlayer = KeyNNClassifier(s)
-            res, value = manyPlaysResults(3)
-            if value > max_value:
-                state = s
-                max_value = value
-                better = True
-        end = time.process_time()
-    return state, max_value
-
 
 from scipy import stats
 import numpy as np
 
 
 def manyPlaysResults(rounds):
-    global aiPlayer
-
     # Parâmetros do algoritmo genético
-    population_size = 20
-    generations = 20
-    mutation_rate = 0.7
+    population_size = 200
+    generations = 100
+    mutation_rate = 0.03
 
     # Inicialização da população
     def initialize_population(size):
-        return np.random.rand(size, 10)  # Supondo 10 genes por indivíduo
+        population = []
+        for _ in range(size):
+            individual = {
+            'W1': np.random.randn(7, 64) * 0.01,
+            'b1': np.zeros((1, 64)),
+            'W2': np.random.randn(64, 64) * 0.01,
+            'b2': np.zeros((1, 64)),
+            'W3': np.random.randn(64, 3) * 0.01,
+            'b3': np.zeros((1, 3))
+            }
+            population.append(individual)
+        return population
 
     # Função de aptidão
-    def fitness(individual):
-        aiPlayer = individual  # Define o aiPlayer como o indivíduo atual
+    def fitness(individual, rounds):
+        global aiPlayer
+        aiPlayer = KeyNNClassifier(individual)  # Define o aiPlayer como o indivíduo atual
         results = []
         for _ in range(rounds):
             results.append(playGame())  # Chama a função playGame para avaliar a aptidão do indivíduo
@@ -522,29 +490,43 @@ def manyPlaysResults(rounds):
     # Seleção dos indivíduos mais aptos
     def select(population, fitnesses):
         indices = np.argsort(fitnesses)
-        return population[indices[-2:]]  # Seleciona os dois melhores indivíduos
+        # Seleciona os dois melhores indivíduos usando compreensão de lista
+        return [population[i] for i in indices[-2:]]
 
-    # Crossover
     def crossover(parent1, parent2):
-        crossover_point = np.random.randint(1, len(parent1) - 1)
-        child1 = np.concatenate((parent1[:crossover_point], parent2[crossover_point:]))
-        child2 = np.concatenate((parent2[:crossover_point], parent1[crossover_point:]))
+        child1, child2 = {}, {}
+        
+        # Realiza crossover para cada chave no dicionário
+        for key in parent1.keys():
+            # Gera um ponto de crossover aleatório dentro do intervalo do array
+            crossover_point = np.random.randint(1, parent1[key].size)  # Usa o tamanho total do array
+            # Achata os arrays para facilitar o crossover
+            flat_parent1 = parent1[key].flatten()
+            flat_parent2 = parent2[key].flatten()
+            # Realiza o crossover
+            flat_child1 = np.concatenate((flat_parent1[:crossover_point], flat_parent2[crossover_point:]))
+            flat_child2 = np.concatenate((flat_parent2[:crossover_point], flat_parent1[crossover_point:]))
+            # Reshape dos arrays para a forma original
+            child1[key] = flat_child1.reshape(parent1[key].shape)
+            child2[key] = flat_child2.reshape(parent2[key].shape)
+        
         return child1, child2
 
-    # Mutação
     def mutate(individual, rate):
-        for i in range(len(individual)):
-            if np.random.rand() < rate:
-                individual[i] = np.random.rand()
-        return individual
+        mutated_individual = {}
+        for key in individual.keys():
+            mutated_array = individual[key].copy()  # Copia o array original para não alterar o original diretamente
+            for idx, _ in np.ndenumerate(mutated_array):
+                if np.random.rand() < rate:
+                    mutated_array[idx] = np.random.randn() * 0.01  # Aplica uma mutação (pequena alteração aleatória)
+            mutated_individual[key] = mutated_array
+        return mutated_individual
 
     # Algoritmo Genético
     population = initialize_population(population_size)
-
     for generation in range(generations):
-        fitnesses = np.array([fitness(individual) for individual in population])
+        fitnesses = np.array([fitness(individual, 3) for individual in population])
         new_population = []
-
         for _ in range(population_size // 2):
             parents = select(population, fitnesses)
             child1, child2 = crossover(parents[0], parents[1])
@@ -555,10 +537,10 @@ def manyPlaysResults(rounds):
         population = np.array(new_population)
 
     # Selecionar o melhor indivíduo da população final
-    fitnesses = np.array([fitness(individual) for individual in population])
+    fitnesses = np.array([fitness(individual, 3) for individual in population])
     best_individual = population[np.argmax(fitnesses)]
     best_fitness = max(fitnesses)
-    
+    print(best_fitness)
     return best_individual, best_fitness
 
 
@@ -566,13 +548,7 @@ def manyPlaysResults(rounds):
 def main():
     global aiPlayer
 
-    initial_state = [(15, 250), (18, 350), (20, 450), (1000, 550)]
-    aiPlayer = KeyNNClassifier(initial_state)
-    best_state, best_value = gradient_ascent(initial_state, 5000)
-    aiPlayer = KeyNNClassifier(best_state)
-    res, value = manyPlaysResults(30)
-    npRes = np.asarray(res)
-    print(res, npRes.mean(), npRes.std(), value)
+    res, value = manyPlaysResults(1)
 
 
 main()

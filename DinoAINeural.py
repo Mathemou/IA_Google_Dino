@@ -3,6 +3,11 @@ import os
 import random
 import time
 from sys import exit
+import json
+import numpy as np
+import pickle
+import winsound
+
 pygame.init()
 
 global aiPlayer
@@ -458,8 +463,8 @@ import numpy as np
 
 def manyPlaysResults(rounds):
     # Parâmetros do algoritmo genético
-    population_size = 200
-    generations = 100
+    population_size = 100
+    generations = 300
     mutation_rate = 0.03
 
     # Inicialização da população
@@ -540,15 +545,24 @@ def manyPlaysResults(rounds):
     fitnesses = np.array([fitness(individual, 3) for individual in population])
     best_individual = population[np.argmax(fitnesses)]
     best_fitness = max(fitnesses)
-    print(best_fitness)
+    print(f'Melhor: {best_fitness}')
+    with open('data.pkl', 'wb') as file:
+        pickle.dump(best_individual, file)
+    winsound.Beep(1000, 500)
     return best_individual, best_fitness
-
 
 
 def main():
     global aiPlayer
-
-    res, value = manyPlaysResults(1)
-
-
+    # Treino
+    #res, value = manyPlaysResults(30)
+    # Teste
+    """ with open('data.pkl', 'rb') as file:
+        data = pickle.load(file)
+    
+    aiPlayer = KeyNNClassifier(data)
+    pontos = []
+    for _ in range(30):
+        pontos.append(playGame())
+    print(pontos) """
 main()

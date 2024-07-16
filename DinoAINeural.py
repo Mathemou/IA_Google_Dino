@@ -260,38 +260,6 @@ class KeyNNClassifier(KeyClassifier):
 
         return model['A3']
 
-    def train_model(self, X_train, y_train, epochs=10, learning_rate=0.01):
-        m = X_train.shape[0]
-
-        for epoch in range(epochs):
-            A3 = self.forward_propagation(X_train)
-
-            # One-hot encoding dos rótulos
-            y_one_hot = np.eye(3)[y_train]
-
-            # Backpropagation
-            dZ3 = A3 - y_one_hot
-            dW3 = np.dot(self.model['A2'].T, dZ3) / m
-            db3 = np.sum(dZ3, axis=0, keepdims=True) / m
-
-            dA2 = np.dot(dZ3, self.model['W3'].T)
-            dZ2 = dA2 * (self.model['A2'] > 0)
-            dW2 = np.dot(self.model['A1'].T, dZ2) / m
-            db2 = np.sum(dZ2, axis=0, keepdims=True) / m
-
-            dA1 = np.dot(dZ2, self.model['W2'].T)
-            dZ1 = dA1 * (self.model['A1'] > 0)
-            dW1 = np.dot(X_train.T, dZ1) / m
-            db1 = np.sum(dZ1, axis=0, keepdims=True) / m
-
-            # Atualização dos parâmetros
-            self.model['W3'] -= learning_rate * dW3
-            self.model['b3'] -= learning_rate * db3
-            self.model['W2'] -= learning_rate * dW2
-            self.model['b2'] -= learning_rate * db2
-            self.model['W1'] -= learning_rate * dW1
-            self.model['b1'] -= learning_rate * db1
-
     def keySelector(self, distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType):
         obType_encoded = 1 if isinstance(obType, Bird) else 0
         nextObType_encoded = 1 if isinstance(nextObType, Bird) else 0
